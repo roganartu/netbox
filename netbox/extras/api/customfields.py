@@ -25,13 +25,9 @@ class CustomFieldDefaultValues:
     def __call__(self, serializer_field):
         self.model = serializer_field.parent.Meta.model
 
-        # Retrieve the CustomFields for the parent model
-        content_type = ContentType.objects.get_for_model(self.model)
-        fields = CustomField.objects.filter(obj_type=content_type)
-
         # Populate the default value for each CustomField
         value = {}
-        for field in fields:
+        for field in serializer_field.parent.context["custom_fields"]:
             if field.default:
                 if field.type == CustomFieldTypeChoices.TYPE_INTEGER:
                     field_value = int(field.default)
@@ -143,20 +139,19 @@ class CustomFieldModelSerializer(ValidatedModelSerializer):
 
         if self.instance is not None:
 
-            # Retrieve the set of CustomFields which apply to this type of object
-            content_type = ContentType.objects.get_for_model(self.Meta.model)
-            fields = CustomField.objects.filter(obj_type=content_type)
-
             # Populate CustomFieldValues for each instance from database
             try:
                 for obj in self.instance:
-                    self._populate_custom_fields(obj, fields)
+                    self._populate_custom_fields(obj, self.context["custom_fields"])
             except TypeError:
-                self._populate_custom_fields(self.instance, fields)
+                self._populate_custom_fields(self.instance, self.context["custom_fields"])
 
     def _populate_custom_fields(self, instance, custom_fields):
         instance.custom_fields = {}
         for field in custom_fields:
+            # This ensures that the cache is initialized, but uses the context fields
+            # instead of issuing a new query for each model.
+            instance.ensure_cache(fields=custom_fields)
             value = instance.cf.get(field.name)
             if field.type == CustomFieldTypeChoices.TYPE_SELECT and value is not None:
                 instance.custom_fields[field.name] = CustomFieldChoiceSerializer(value).data

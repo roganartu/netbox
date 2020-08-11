@@ -23,12 +23,16 @@ class CustomFieldModel(models.Model):
     class Meta:
         abstract = True
 
-    def cache_custom_fields(self):
+    def ensure_cache(self, fields=None):
+        if self._cf is None:
+            self.cache_custom_fields(fields=fields)
+
+    def cache_custom_fields(self, fields=None):
         """
         Cache all custom field values for this instance
         """
         self._cf = {
-            field.name: value for field, value in self.get_custom_fields().items()
+            field.name: value for field, value in self.get_custom_fields(fields=fields).items()
         }
 
     @property
@@ -40,11 +44,12 @@ class CustomFieldModel(models.Model):
             self.cache_custom_fields()
         return self._cf
 
-    def get_custom_fields(self):
+    def get_custom_fields(self, fields=None):
         """
         Return a dictionary of custom fields for a single object in the form {<field>: value}.
         """
-        fields = CustomField.objects.get_for_model(self)
+        if fields is None:
+            fields = CustomField.objects.get_for_model(self)
 
         # If the object exists, populate its custom fields with values
         if hasattr(self, 'pk'):
